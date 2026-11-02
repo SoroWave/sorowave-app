@@ -4,12 +4,19 @@ The browser interface for SoroWave. Browse open tasks, submit an application, an
 
 ## Run
 
-Start `sorowave-api` on `http://localhost:4173`, then serve this directory with a static server. For example: `npx serve .`.
+Requires Node.js 20.19+.
 
-If the API is unavailable, the page uses sample tasks so the interface remains explorable. This is a prototype; there is no login or wallet integration yet.
+```sh
+npm install
+npm run dev
+```
+
+Start `sorowave-api` on `http://localhost:4173` in a second terminal. Copy `.env.example` to `.env.local` to change the API URL. Install the Freighter browser wallet and switch it to Stellar Testnet before connecting. The app checks the wallet network and will not use a wallet connected to another network. The test XLM button explicitly calls Friendbot only after you click it.
+
+The board and application flow are a prototype; applications are stored by the local API. No wallet transaction or bounty payment is currently submitted from the app. Contract transactions should be enabled only after the contract has been deployed, initialized, and reviewed on testnet.
 
 ## Contribution ideas
 
 - Add search, tags, and task detail pages.
 - Add responsive accessibility checks and keyboard navigation.
-- Add a Stellar wallet connection for testnet only.
+- Add Soroban bounty creation and release after a reviewed testnet deployment.
