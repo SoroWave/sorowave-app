@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1714">
+  <title>SoroWave — open source, in motion</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="SoroWave home"><span class="brand-mark">S</span> SoroWave</a>
+    <nav aria-label="Main navigation"><a class="active" href="#explore">Explore work</a><a href="#how">How it works</a></nav>
+    <a class="button button-quiet" href="#publish">For maintainers <span aria-hidden="true">↗</span></a>
+  </header>
+  <main id="top">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="live-dot"></span> STELLAR BUILDERS, BUILD TOGETHER</p>
+        <h1>Good open source<br>moves <em>everyone</em> forward.</h1>
+        <p class="hero-lede">Pick a real problem. Ship a useful fix. Help build the tools and projects moving the Stellar ecosystem forward.</p>
+        <div class="hero-actions"><a class="button button-bright" href="#explore">Explore open tasks <span aria-hidden="true">→</span></a><a class="text-link" href="#how">See how it works <span aria-hidden="true">↓</span></a></div>
+        <div class="hero-note"><span class="avatar-stack"><i>J</i><i>A</i><i>M</i></span><span>Built in the open, one useful contribution at a time.</span></div>
+      </div>
+      <div class="hero-art" aria-label="Abstract illustration of connected contribution paths">
+        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div>
+        <div class="art-core"><span>SW</span><small>BUILD<br>TOGETHER</small></div>
+        <span class="node node-one">✳</span><span class="node node-two">⌘</span><span class="node node-three">↗</span><span class="node node-four">◎</span>
+        <span class="art-caption">COMMUNITY<br>POWERED</span>
+      </div>
+    </section>
+
+    <section class="stats" aria-label="Project goals">
+      <div><strong>01</strong><span>Real problems<br>worth solving</span></div><div><strong>02</strong><span>Open work<br>for builders</span></div><div><strong>03</strong><span>Progress the<br>community can see</span></div><div class="stats-tag">A small start.<br><b>A bigger ecosystem.</b></div>
+    </section>
+
+    <section class="work-section" id="explore">
+      <div class="section-heading"><div><p class="eyebrow">THE WORK BOARD</p><h2>Find your next <em>good problem.</em></h2></div><a href="#publish" class="text-link">Have a project? Publish work <span>↗</span></a></div>
+      <div class="filters" role="group" aria-label="Filter tasks"><button class="filter active" data-filter="all">All work <span id="count-all">0</span></button><button class="filter" data-filter="contracts">Contracts</button><button class="filter" data-filter="developer-tools">Developer tools</button><button class="filter" data-filter="payments">Payments</button></div>
+      <div class="task-list" id="task-list" aria-live="polite"></div>
+      <p class="board-foot"><span class="live-dot"></span> Early preview · sample tasks are starting points for the community</p>
+    </section>
+
+    <section class="how-section" id="how"><div class="how-title"><p class="eyebrow">A BETTER WAY TO CONTRIBUTE</p><h2>From a good idea<br>to <em>real progress.</em></h2></div><div class="steps"><article><span>01</span><h3>Pick a task</h3><p>Find a clear, useful issue in an open Stellar project.</p></article><article><span>02</span><h3>Build in the open</h3><p>Apply, agree on scope, then share progress as you work.</p></article><article><span>03</span><h3>Ship it together</h3><p>Get feedback, merge the improvement, and help the project grow.</p></article></div></section>
+
+    <section class="maintainer-cta" id="publish"><div><p class="eyebrow">MAINTAINERS WELCOME</p><h2>Your backlog could be<br>someone’s <em>breakthrough.</em></h2><p>Bring a public repository, write a clear task, and give contributors a welcoming place to start.</p></div><a class="button button-dark" href="https://github.com/new" target="_blank" rel="noreferrer">Start with a public repo <span>↗</span></a></section>
+  </main>
+  <footer><a class="brand" href="#top"><span class="brand-mark">S</span> SoroWave</a><span>Open work. Shared progress. Built on Stellar.</span><a href="https://developers.stellar.org/" target="_blank" rel="noreferrer">Stellar developer docs ↗</a></footer>
+  <dialog id="apply-dialog"><form method="dialog" class="dialog-card"><button class="dialog-close" aria-label="Close">×</button><p class="eyebrow">RAISE YOUR HAND</p><h2>Apply to this task</h2><p id="dialog-task" class="dialog-task"></p><label for="applicant">Your GitHub username</label><input id="applicant" name="applicant" required placeholder="octocat"><label for="message">Why are you a good fit?</label><textarea id="message" name="message" required minlength="20" placeholder="Share relevant experience and how you would approach this task…"></textarea><button class="button button-bright" id="submit-application" value="submit">Send application <span>→</span></button><p class="form-note" id="form-note">This demo saves your application to the local API when it is running.</p></form></dialog>
+  <script src="app.js"></script>
+</body>
+</html>
