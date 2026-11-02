@@ -158,7 +158,7 @@ async function loadOnchainRewards() {
   try {
     const config = await request('/stellar/config');
     if (!config.contractId || !/^\d+$/.test(String(config.waveId ?? ''))) {
-      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('not configured')}</div><p>The app is wired to read and claim rewards from the Soroban pool, but no deployed pool contract and numeric wave ID are configured yet. No onchain reward or payout is currently available.</p><p class="form-note">A maintainer must deploy and initialize the reviewed pool, then set <code>SOROWAVE_CONTRACT_ID</code> and <code>SOROWAVE_WAVE_ID</code> in the API environment.</p>`;
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('not configured')}</div><p>The app is wired to fund a Soroban pool, record verified contribution points, and read or claim rewards. No deployed pool contract and numeric wave ID are configured yet, so onchain rewards are not available.</p><p class="form-note">A maintainer must deploy and initialize the reviewed pool, then set <code>SOROWAVE_CONTRACT_ID</code> and <code>SOROWAVE_WAVE_ID</code> in the API environment.</p>`;
       return;
     }
     if (!walletAddress) {
