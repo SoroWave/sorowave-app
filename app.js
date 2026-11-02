@@ -1,4 +1,4 @@
-import { isConnected, requestAccess, getNetworkDetails } from '@stellar/freighter-api';
+import { isConnected, requestAccess, getNetworkDetails, signTransaction } from '@stellar/freighter-api';
 
 const API = import.meta.env.VITE_API_URL || window.SOROWAVE_API || 'http://localhost:4173';
 const TESTNET = 'Test SDF Network ; September 2015';
@@ -136,7 +136,7 @@ async function lookupGitHubIssue(event) {
 
 async function renderApplications() {
   const username = localStorage.getItem('sorowave.github') || '';
-  app.innerHTML = pageShell('CONTRIBUTOR SPACE', 'Applications & points', 'Track decisions, submit a pull request after assignment, and see the preview cycle leaderboard.', `<form id="lookup-apps" class="search-bar"><input name="applicant" value="${esc(username)}" required placeholder="Your GitHub username"><button class="button button-dark">Load my activity</button></form><div id="my-applications">${empty('Enter your GitHub username to load your applications.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">COMMUNITY STANDINGS</p><h2>Preview leaderboard</h2></div></div><div id="leaderboard" class="leaderboard-list">${empty('No points have been earned in this preview cycle yet.')}</div>`);
+  app.innerHTML = pageShell('CONTRIBUTOR SPACE', 'Applications & points', 'Track decisions, submit a pull request after assignment, and see the preview cycle leaderboard.', `<section id="onchain-rewards" class="network-panel"><div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div><span class="network-badge degraded">Loading</span></div><p>Checking the configured SoroWave pool contract…</p></section><form id="lookup-apps" class="search-bar"><input name="applicant" value="${esc(username)}" required placeholder="Your GitHub username"><button class="button button-dark">Load my activity</button></form><div id="my-applications">${empty('Enter your GitHub username to load your applications.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">COMMUNITY STANDINGS</p><h2>Preview leaderboard</h2></div></div><div id="leaderboard" class="leaderboard-list">${empty('No points have been earned in this preview cycle yet.')}</div>`);
   document.querySelector('#lookup-apps').addEventListener('submit', async event => {
     event.preventDefault();
     const handle = new FormData(event.currentTarget).get('applicant').trim().replace(/^@/, '');
@@ -144,7 +144,70 @@ async function renderApplications() {
     await loadApplications(handle);
   });
   await loadLeaderboard();
+  await loadOnchainRewards();
   if (username) await loadApplications(username);
+}
+
+async function loadOnchainRewards() {
+  const panel = document.querySelector('#onchain-rewards');
+  if (!panel) return;
+  const badge = state => `<span class="network-badge ${state === 'ready' ? 'healthy' : 'degraded'}">${state}</span>`;
+  try {
+    const config = await request('/stellar/config');
+    if (!config.contractId || !/^\d+$/.test(String(config.waveId ?? ''))) {
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('not configured')}</div><p>The app is wired to read and claim rewards from the Soroban pool, but no deployed pool contract and numeric wave ID are configured yet. No onchain reward or payout is currently available.</p><p class="form-note">A maintainer must deploy and initialize the reviewed pool, then set <code>SOROWAVE_CONTRACT_ID</code> and <code>SOROWAVE_WAVE_ID</code> in the API environment.</p>`;
+      return;
+    }
+    if (!walletAddress) {
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('wallet needed')}</div><p>A testnet pool is configured. Connect Freighter to read your onchain points and claim status.</p>`;
+      return;
+    }
+    const details = await getNetworkDetails();
+    if (details.error || details.networkPassphrase !== TESTNET) throw new Error('Switch Freighter to Stellar Testnet to read this pool.');
+    const { contract } = await import('@stellar/stellar-sdk');
+    const client = await contract.Client.from({ contractId: config.contractId, networkPassphrase: TESTNET, rpcUrl: config.rpcUrl, publicKey: walletAddress });
+    const waveId = BigInt(config.waveId);
+    const [waveTx, pointsTx, claimedTx] = await Promise.all([
+      client.get_wave({ wave_id: waveId }),
+      client.get_points({ wave_id: waveId, contributor: walletAddress }),
+      client.has_claimed({ wave_id: waveId, contributor: walletAddress })
+    ]);
+    const wave = waveTx.result;
+    const points = Number(pointsTx.result || 0);
+    const claimed = Boolean(claimedTx.result);
+    if (!wave) {
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('configured')}</div><p>Contract is configured, but wave ${esc(config.waveId)} has not been created onchain yet.</p>`;
+      return;
+    }
+    const remaining = wave.remaining_pool?.toString?.() ?? String(wave.remaining_pool ?? '0');
+    const finalized = Boolean(wave.finalized);
+    const canClaim = finalized && points > 0 && !claimed;
+    panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge(finalized ? 'ready' : 'active')}</div><div class="wave-metrics"><article><strong>${esc(remaining)}</strong><span>token base units remaining</span></article><article><strong>${points}</strong><span>your onchain points</span></article><article><strong>${wave.total_points}</strong><span>total awarded points</span></article><article><strong>${claimed ? 'Yes' : 'No'}</strong><span>claimed by this wallet</span></article></div><p>${finalized ? 'This pool is finalized. Eligible contributors can claim their pro-rata token reward.' : 'The pool is not finalized yet; claims stay disabled until a maintainer finalizes it onchain.'}</p><button id="claim-reward" class="button button-bright" ${canClaim ? '' : 'disabled'}>${claimed ? 'Already claimed' : 'Claim testnet reward →'}</button><p id="claim-status" class="form-note">Read directly from the Soroban testnet contract. Claiming requires Freighter approval.</p>`;
+    document.querySelector('#claim-reward')?.addEventListener('click', () => claimOnchainReward(client, waveId));
+  } catch (error) {
+    panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('unavailable')}</div><p>${esc(error.message || 'Could not read the pool contract.')}</p><p class="form-note">No transaction was submitted.</p>`;
+  }
+}
+
+async function claimOnchainReward(client, waveId) {
+  const button = document.querySelector('#claim-reward');
+  const status = document.querySelector('#claim-status');
+  if (!walletAddress || !button || !status) return;
+  button.disabled = true;
+  status.textContent = 'Preparing claim. Review and approve the transaction in Freighter to continue.';
+  try {
+    const tx = await client.claim({ wave_id: waveId, contributor: walletAddress });
+    const sent = await tx.signAndSend({ signTransaction: async (xdr, options) => {
+      const signed = await signTransaction(xdr, { networkPassphrase: TESTNET, address: walletAddress });
+      if (signed.error) throw new Error(signed.error.message || 'Freighter declined or could not sign the claim.');
+      return { signedTxXdr: signed.signedTxXdr, signerAddress: signed.signerAddress };
+    } });
+    status.textContent = `Claim confirmed on Stellar testnet: ${sent.hash || 'transaction submitted'}.`;
+    await loadOnchainRewards();
+  } catch (error) {
+    status.textContent = `${error.message || 'Claim failed.'} No funds move unless the transaction is approved and confirmed.`;
+    button.disabled = false;
+  }
 }
 
 async function loadApplications(handle) {
@@ -283,6 +346,7 @@ async function connectWallet() {
     document.querySelector('#connect-wallet').textContent = `${walletAddress.slice(0, 5)}…${walletAddress.slice(-5)}`;
     if (status) status.textContent = 'Connected on Stellar testnet. Applications can include this address.';
     await refreshBalance(walletAddress);
+    if (document.querySelector('#onchain-rewards')) await loadOnchainRewards();
   } catch (error) {
     if (status) status.textContent = error.message || 'Wallet connection failed.';
     else alert(error.message || 'Wallet connection failed.');

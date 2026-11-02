@@ -11,4 +11,4 @@ SoroWave is an independent community preview. Listing an issue here does not enr
 
 ## Local checks
 
-Use Node.js 18 or newer, run `npm ci`, then `npm run build`. The app uses Vite and the Freighter API. Wallet interactions must remain on testnet unless a separately reviewed production plan is approved.
+Use Node.js 22.12 or newer, run `npm ci`, then `npm run build`. The app uses Vite, the Freighter API, and the Stellar SDK. Wallet interactions must remain on testnet unless a separately reviewed production plan is approved.
