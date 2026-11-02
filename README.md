@@ -15,7 +15,7 @@ Start `sorowave-api` on `http://localhost:4173` in a second terminal. Copy `.env
 
 Maintainers add public GitHub issues; the API checks that an issue exists and is open. Contributors connect a Stellar testnet wallet, apply, wait for assignment, then submit a pull-request link. After GitHub confirms the PR is merged, a maintainer signs an idempotent Soroban points award with Freighter. The API records the completion and transaction hash. The app reads pool state, contributor points, and claim state directly from Soroban; eligible contributors can claim after the pool is funded and finalized. Until the contract is deployed and initialized, configure `SOROWAVE_CONTRACT_ID`, `SOROWAVE_TOKEN_CONTRACT_ID`, and the numeric `SOROWAVE_WAVE_ID` in the API environment. The UI reports the pool as unavailable until then.
 
-The cycle follows the common Wave points scale: Trivial (100), Medium (150), and High (200). The API preview enforces up to 15 pending applications per contributor and up to 4 assigned issues per organization. Maintainer controls are unauthenticated and intended for local preview only. The contract is unaudited and the app is testnet-only; do not use real funds.
+The cycle follows the common Wave points scale: Trivial (100), Medium (150), and High (200). The API preview enforces up to 15 pending applications per contributor and up to 4 assigned issues per organization. Configure `SOROWAVE_MAINTAINER_TOKEN` privately on the API host; the maintainer desk prompts for it and stores it in the current browser tab only. Never add it to `VITE_API_URL` or another frontend build variable. The contract is unaudited and the app is testnet-only; do not use real funds.
 
 ## Contribution ideas
 

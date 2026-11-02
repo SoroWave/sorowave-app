@@ -37,8 +37,33 @@ const empty = message => `<div class="empty-state">${esc(message)}</div>`;
 async function request(path, options) {
   const response = await fetch(`${API}${path}`, options);
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || 'The request could not be completed.');
+  if (!response.ok) {
+    const error = new Error(data.error || 'The request could not be completed.');
+    error.status = response.status;
+    throw error;
+  }
   return data;
+}
+
+async function requestAsMaintainer(path, options = {}) {
+  let token = sessionStorage.getItem('sorowave.maintainerToken') || '';
+  if (!token) {
+    token = window.prompt('Enter the maintainer token configured by the SoroWave API host:') || '';
+    if (!token) throw new Error('Maintainer token is required for this action.');
+    sessionStorage.setItem('sorowave.maintainerToken', token);
+  }
+  try {
+    return await request(path, {
+      ...options,
+      headers: { ...options.headers, authorization: `Bearer ${token}` }
+    });
+  } catch (error) {
+    if (error.status === 401) {
+      sessionStorage.removeItem('sorowave.maintainerToken');
+      throw new Error('That maintainer token was rejected. Reload the page and enter the correct token.');
+    }
+    throw error;
+  }
 }
 
 function route() {
@@ -296,7 +321,7 @@ async function loadApplications(handle) {
   if (!target) return;
   try {
     const data = await request(`/applications?applicant=${encodeURIComponent(handle)}`);
-    target.innerHTML = data.applications.length ? `<div class="application-list">${data.applications.map(item => `<article class="application-card"><div><p class="eyebrow">${esc(item.status)}</p><h3>${esc(item.taskTitle)}</h3><p>${esc(item.repo)} · submitted ${new Date(item.createdAt).toLocaleDateString()}</p>${item.pointsAwarded ? `<strong class="earned-points">+${Number(item.pointsAwarded)} points earned</strong>` : ''}</div><div><p>${esc(item.message)}</p>${item.prUrl ? `<p><a href="${esc(item.prUrl)}" target="_blank" rel="noreferrer">View pull request ↗</a></p>` : ''}${item.status === 'Assigned' ? `<form class="pr-submit" data-pr-form="${esc(item.id)}"><label>Pull request URL</label><input name="prUrl" type="url" required placeholder="https://github.com/${esc(item.repo)}/pull/123"><button class="button button-dark">Submit PR link</button><small>Use “Closes #${Number(item.issueNumber || 0)}” in its description. The PR is checked against GitHub.</small></form>` : ''}</div></article>`).join('')}</div>` : empty(`No applications found for @${handle} yet.`);
+    target.innerHTML = data.applications.length ? `<div class="application-list">${data.applications.map(item => `<article class="application-card"><div><p class="eyebrow">${esc(item.status)}</p><h3>${esc(item.taskTitle)}</h3><p>${esc(item.repo)} · submitted ${new Date(item.createdAt).toLocaleDateString()}</p>${item.pointsAwarded ? `<strong class="earned-points">+${Number(item.pointsAwarded)} points earned</strong>` : ''}</div><div>${item.prUrl ? `<p><a href="${esc(item.prUrl)}" target="_blank" rel="noreferrer">View pull request ↗</a></p>` : ''}${item.status === 'Assigned' ? `<form class="pr-submit" data-pr-form="${esc(item.id)}"><label>Pull request URL</label><input name="prUrl" type="url" required placeholder="https://github.com/${esc(item.repo)}/pull/123"><button class="button button-dark">Submit PR link</button><small>Use “Closes #${Number(item.issueNumber || 0)}” in its description. The PR is checked against GitHub.</small></form>` : ''}</div></article>`).join('')}</div>` : empty(`No applications found for @${handle} yet.`);
     target.querySelectorAll('[data-pr-form]').forEach(form => form.addEventListener('submit', submitPullRequest));
   } catch (error) { target.innerHTML = appError(error.message); }
 }
@@ -316,7 +341,7 @@ async function renderMaintainer() {
   try {
     [allTasks, applications] = await Promise.all([
       request('/tasks?all=true').then(data => data.tasks),
-      request('/applications').then(data => data.applications)
+      requestAsMaintainer('/applications').then(data => data.applications)
     ]);
   } catch (err) { error = err.message; }
   try { networkStatus = await request('/stellar/status'); }
@@ -378,7 +403,7 @@ async function publishTask(event) {
   note.textContent = 'Adding issue…';
   const input = Object.fromEntries(new FormData(event.currentTarget));
   try {
-    const data = await request('/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
+    const data = await requestAsMaintainer('/tasks', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) });
     location.hash = `/tasks/${encodeURIComponent(data.task.id)}`;
   } catch (error) {
     note.textContent = error.message;
@@ -428,7 +453,7 @@ async function reviewApplication(event) {
       awardTx = sent.hash;
       if (!awardTx) throw new Error('The award transaction was submitted, but no confirmation hash was returned. Check the Stellar testnet explorer before retrying.');
     }
-    await request(`/applications/${encodeURIComponent(button.dataset.id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status, ...(awardTx ? { onchainAwardTx: awardTx } : {}) }) });
+    await requestAsMaintainer(`/applications/${encodeURIComponent(button.dataset.id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status, ...(awardTx ? { onchainAwardTx: awardTx } : {}) }) });
     await renderMaintainer();
   } catch (error) {
     alert(awardTx ? `Soroban awarded the points in transaction ${awardTx}, but the application record did not sync: ${error.message}. You can retry safely; the contract prevents duplicate awards for this application.` : error.message);
