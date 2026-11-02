@@ -1,10 +1,10 @@
 # SoroWave App
 
-The browser interface for SoroWave. Browse open tasks, submit an application, and preview maintainer workflows.
+The browser interface for SoroWave. It includes six routed pages: Explore, Task details, Publish work, My applications, Maintainer dashboard, and About.
 
 ## Run
 
-Requires Node.js 20.19+.
+Requires Node.js 18+.
 
 ```sh
 npm install
@@ -13,7 +13,7 @@ npm run dev
 
 Start `sorowave-api` on `http://localhost:4173` in a second terminal. Copy `.env.example` to `.env.local` to change the API URL. Install the Freighter browser wallet and switch it to Stellar Testnet before connecting. The app checks the wallet network and will not use a wallet connected to another network. The test XLM button explicitly calls Friendbot only after you click it.
 
-The board and application flow are a prototype; applications are stored by the local API. No wallet transaction or bounty payment is currently submitted from the app. Contract transactions should be enabled only after the contract has been deployed, initialized, and reviewed on testnet.
+Tasks and applications are stored by the API. The maintainer overview is public and has no authentication, so this is suitable for local review only. No wallet transaction or bounty payment is currently submitted from the app. Contract transactions should be enabled only after the contract has been deployed, initialized, and reviewed on testnet.
 
 ## Contribution ideas
 
