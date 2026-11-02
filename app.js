@@ -1,4 +1,4 @@
-import { isConnected, requestAccess, getNetworkDetails } from '@stellar/freighter-api';
+import { isConnected, requestAccess, getNetworkDetails, signTransaction } from '@stellar/freighter-api';
 
 const API = import.meta.env.VITE_API_URL || window.SOROWAVE_API || 'http://localhost:4173';
 const TESTNET = 'Test SDF Network ; September 2015';
@@ -104,8 +104,11 @@ async function renderTask(id) {
     app.innerHTML = pageShell('NOT FOUND', 'Issue not found', 'This issue may have been removed from the preview.', '<a class="button button-bright" href="#/explore">Back to issues</a>');
     return;
   }
-  app.innerHTML = pageShell('GITHUB ISSUE', esc(item.title), `${esc(item.repo)} #${Number(item.issueNumber || 0)} · ${esc(item.category)} · ${esc(item.complexity || 'Trivial')}`, `<article class="detail-card"><p>${esc(item.description || 'See the GitHub issue for the maintainer’s full scope and acceptance criteria.')}</p><dl><div><dt>Points</dt><dd>${Number(item.points || 100)} preview points</dd></div><div><dt>Issue state</dt><dd>${esc(item.status || 'Open')}</dd></div><div><dt>Wave</dt><dd>Community preview cycle</dd></div></dl><p class="assignment-rule"><b>Contribution rule:</b> Apply first. Wait until a maintainer assigns you before starting work. Link your pull request to the issue with <code>Closes #${Number(item.issueNumber || 0)}</code>.</p><div class="detail-actions"><a class="button button-quiet" href="${esc(item.issueUrl)}" target="_blank" rel="noreferrer">Read issue on GitHub ↗</a><button class="button button-bright" id="apply-task" ${item.status === 'Open' ? '' : 'disabled'}>Apply to this issue →</button></div><p class="form-note">Preview points are not money. This project has no funded reward pool or payout yet.</p></article>`, '<a class="text-link" href="#/explore">← All issues</a>');
-  document.querySelector('#apply-task')?.addEventListener('click', () => openApply(item));
+  app.innerHTML = pageShell('GITHUB ISSUE', esc(item.title), `${esc(item.repo)} #${Number(item.issueNumber || 0)} · ${esc(item.category)} · ${esc(item.complexity || 'Trivial')}`, `<article class="detail-card"><p>${esc(item.description || 'See the GitHub issue for the maintainer’s full scope and acceptance criteria.')}</p><dl><div><dt>Points</dt><dd>${Number(item.points || 100)} preview points</dd></div><div><dt>Issue state</dt><dd>${esc(item.status || 'Open')}</dd></div><div><dt>Wave</dt><dd>Community preview cycle</dd></div></dl><p class="assignment-rule"><b>Contribution rule:</b> Connect a Stellar testnet wallet to apply. Wait until a maintainer assigns you before starting work. Link your pull request to the issue with <code>Closes #${Number(item.issueNumber || 0)}</code>.</p><div class="detail-actions"><a class="button button-quiet" href="${esc(item.issueUrl)}" target="_blank" rel="noreferrer">Read issue on GitHub ↗</a><button class="button button-bright" id="apply-task" ${item.status === 'Open' ? '' : 'disabled'}>${walletAddress ? 'Apply to this issue →' : 'Connect wallet to apply →'}</button></div><p class="form-note">Points and payouts are available onchain only after the Soroban pool is deployed and configured.</p></article>`, '<a class="text-link" href="#/explore">← All issues</a>');
+  document.querySelector('#apply-task')?.addEventListener('click', async () => {
+    if (!walletAddress) await connectWallet();
+    if (walletAddress) openApply(item);
+  });
 }
 
 async function renderPublish() {
@@ -136,7 +139,7 @@ async function lookupGitHubIssue(event) {
 
 async function renderApplications() {
   const username = localStorage.getItem('sorowave.github') || '';
-  app.innerHTML = pageShell('CONTRIBUTOR SPACE', 'Applications & points', 'Track decisions, submit a pull request after assignment, and see the preview cycle leaderboard.', `<form id="lookup-apps" class="search-bar"><input name="applicant" value="${esc(username)}" required placeholder="Your GitHub username"><button class="button button-dark">Load my activity</button></form><div id="my-applications">${empty('Enter your GitHub username to load your applications.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">COMMUNITY STANDINGS</p><h2>Preview leaderboard</h2></div></div><div id="leaderboard" class="leaderboard-list">${empty('No points have been earned in this preview cycle yet.')}</div>`);
+  app.innerHTML = pageShell('CONTRIBUTOR SPACE', 'Applications & points', 'Track decisions, submit a pull request after assignment, and see the preview cycle leaderboard.', `<section id="onchain-rewards" class="network-panel"><div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div><span class="network-badge degraded">Loading</span></div><p>Checking the configured SoroWave pool contract…</p></section><form id="lookup-apps" class="search-bar"><input name="applicant" value="${esc(username)}" required placeholder="Your GitHub username"><button class="button button-dark">Load my activity</button></form><div id="my-applications">${empty('Enter your GitHub username to load your applications.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">COMMUNITY STANDINGS</p><h2>Preview leaderboard</h2></div></div><div id="leaderboard" class="leaderboard-list">${empty('No points have been earned in this preview cycle yet.')}</div>`);
   document.querySelector('#lookup-apps').addEventListener('submit', async event => {
     event.preventDefault();
     const handle = new FormData(event.currentTarget).get('applicant').trim().replace(/^@/, '');
@@ -144,7 +147,148 @@ async function renderApplications() {
     await loadApplications(handle);
   });
   await loadLeaderboard();
+  await loadOnchainRewards();
   if (username) await loadApplications(username);
+}
+
+async function loadOnchainRewards() {
+  const panel = document.querySelector('#onchain-rewards');
+  if (!panel) return;
+  const badge = state => `<span class="network-badge ${state === 'ready' ? 'healthy' : 'degraded'}">${state}</span>`;
+  try {
+    const config = await request('/stellar/config');
+    if (!config.contractId || !/^\d+$/.test(String(config.waveId ?? ''))) {
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('not configured')}</div><p>The app is wired to fund a Soroban pool, record verified contribution points, and read or claim rewards. No deployed pool contract and numeric wave ID are configured yet, so onchain rewards are not available.</p><p class="form-note">A maintainer must deploy and initialize the reviewed pool, then set <code>SOROWAVE_CONTRACT_ID</code> and <code>SOROWAVE_WAVE_ID</code> in the API environment.</p>`;
+      return;
+    }
+    if (!walletAddress) {
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('wallet needed')}</div><p>A testnet pool is configured. Connect Freighter to read your onchain points and claim status.</p>`;
+      return;
+    }
+    const { client, waveId } = await getPoolConnection(config);
+    const [waveTx, pointsTx, claimedTx] = await Promise.all([
+      client.get_wave({ wave_id: waveId }),
+      client.get_points({ wave_id: waveId, contributor: walletAddress }),
+      client.has_claimed({ wave_id: waveId, contributor: walletAddress })
+    ]);
+    const wave = waveTx.result;
+    const points = Number(pointsTx.result || 0);
+    const claimed = Boolean(claimedTx.result);
+    if (!wave) {
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('configured')}</div><p>Contract is configured, but wave ${esc(config.waveId)} has not been created onchain yet.</p>`;
+      return;
+    }
+    const remaining = wave.remaining_pool?.toString?.() ?? String(wave.remaining_pool ?? '0');
+    const finalized = Boolean(wave.finalized);
+    const canClaim = finalized && points > 0 && !claimed;
+    panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge(finalized ? 'ready' : 'active')}</div><div class="wave-metrics"><article><strong>${esc(remaining)}</strong><span>token base units remaining</span></article><article><strong>${points}</strong><span>your onchain points</span></article><article><strong>${wave.total_points}</strong><span>total awarded points</span></article><article><strong>${claimed ? 'Yes' : 'No'}</strong><span>claimed by this wallet</span></article></div><p>${finalized ? 'This pool is finalized. Eligible contributors can claim their pro-rata token reward.' : 'The pool is not finalized yet; claims stay disabled until a maintainer finalizes it onchain.'}</p><button id="claim-reward" class="button button-bright" ${canClaim ? '' : 'disabled'}>${claimed ? 'Already claimed' : 'Claim testnet reward →'}</button><p id="claim-status" class="form-note">Read directly from the Soroban testnet contract. Claiming requires Freighter approval.</p>`;
+    document.querySelector('#claim-reward')?.addEventListener('click', () => claimOnchainReward(client, waveId));
+  } catch (error) {
+    panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · STELLAR TESTNET</p><h2>Onchain reward pool</h2></div>${badge('unavailable')}</div><p>${esc(error.message || 'Could not read the pool contract.')}</p><p class="form-note">No transaction was submitted.</p>`;
+  }
+}
+
+async function claimOnchainReward(client, waveId) {
+  const button = document.querySelector('#claim-reward');
+  const status = document.querySelector('#claim-status');
+  if (!walletAddress || !button || !status) return;
+  button.disabled = true;
+  status.textContent = 'Preparing claim. Review and approve the transaction in Freighter to continue.';
+  try {
+    const tx = await client.claim({ wave_id: waveId, contributor: walletAddress });
+    const sent = await signAndSendWithFreighter(tx);
+    status.textContent = `Claim confirmed on Stellar testnet: ${sent.hash || 'transaction submitted'}.`;
+    await loadOnchainRewards();
+  } catch (error) {
+    status.textContent = `${error.message || 'Claim failed.'} No funds move unless the transaction is approved and confirmed.`;
+    button.disabled = false;
+  }
+}
+
+async function getPoolConnection(config) {
+  if (!walletAddress) throw new Error('Connect a Stellar testnet wallet in Freighter.');
+  if (!config?.contractId || !/^\d+$/.test(String(config.waveId ?? ''))) throw new Error('The Soroban pool contract and numeric wave ID are not configured.');
+  const details = await getNetworkDetails();
+  if (details.error || details.networkPassphrase !== TESTNET) throw new Error('Switch Freighter to Stellar Testnet. No transaction was submitted.');
+  const { contract } = await import('@stellar/stellar-sdk');
+  const client = await contract.Client.from({ contractId: config.contractId, networkPassphrase: TESTNET, rpcUrl: config.rpcUrl, publicKey: walletAddress });
+  return { client, waveId: BigInt(config.waveId) };
+}
+
+async function signAndSendWithFreighter(tx) {
+  return tx.signAndSend({ signTransaction: async xdr => {
+    const signed = await signTransaction(xdr, { networkPassphrase: TESTNET, address: walletAddress });
+    if (signed.error) throw new Error(signed.error.message || 'Freighter declined or could not sign the transaction.');
+    return { signedTxXdr: signed.signedTxXdr, signerAddress: signed.signerAddress };
+  } });
+}
+
+async function loadChainOperations() {
+  const panel = document.querySelector('#chain-operations');
+  if (!panel) return;
+  try {
+    const config = await request('/stellar/config');
+    if (!config.contractId || !/^\d+$/.test(String(config.waveId ?? ''))) {
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div><span class="network-badge degraded">not configured</span></div><p>Deploy and initialize the reviewed pool contract, then configure its contract ID and numeric wave ID in the API before using onchain operations.</p>`;
+      return;
+    }
+    if (!walletAddress) {
+      panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div><span class="network-badge degraded">wallet needed</span></div><p>Connect the pool administrator wallet in Freighter to inspect or manage this testnet cycle.</p>`;
+      return;
+    }
+    const { client, waveId } = await getPoolConnection(config);
+    const wave = (await client.get_wave({ wave_id: waveId })).result;
+    const badge = wave ? (wave.cancelled ? 'cancelled' : wave.finalized ? 'finalized' : 'active') : 'not created';
+    const details = wave ? `<div class="wave-metrics"><article><strong>${esc(wave.initial_pool)}</strong><span>initial token base units</span></article><article><strong>${esc(wave.remaining_pool)}</strong><span>pool remaining</span></article><article><strong>${wave.total_points}</strong><span>awarded points</span></article><article><strong>${wave.remaining_points}</strong><span>unclaimed points</span></article></div><p>Creator: <code>${esc(wave.creator)}</code></p>` : `<p>Wave ${esc(config.waveId)} has not been created onchain yet.</p>`;
+    const create = !wave ? `<form id="create-pool" class="search-bar"><label class="sr-only" for="pool-amount">Amount in token base units</label><input id="pool-amount" name="amount" type="number" min="1" step="1" required placeholder="Token amount in base units"><button class="button button-bright">Fund pool →</button></form><p class="form-note">The connected wallet must hold the configured token. The transfer and pool creation are one Soroban transaction.</p>` : '';
+    const canFinalize = wave && !wave.finalized && !wave.cancelled && Number(wave.total_points) > 0;
+    const canCancel = wave && !wave.finalized && !wave.cancelled && Number(wave.total_points) === 0 && wave.creator === walletAddress;
+    panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div><span class="network-badge ${wave && !wave.cancelled ? 'healthy' : 'degraded'}">${badge}</span></div>${details}${create}<div class="review-actions">${canFinalize ? '<button id="finalize-pool" class="button button-bright">Finalize pool →</button>' : ''}${canCancel ? '<button id="cancel-pool" class="button button-quiet">Cancel and refund pool</button>' : ''}</div><p id="pool-operation-status" class="form-note">Connected wallet: ${esc(walletAddress)} · Testnet transactions require Freighter approval.</p>`;
+    document.querySelector('#create-pool')?.addEventListener('submit', event => createPool(event, client, waveId));
+    document.querySelector('#finalize-pool')?.addEventListener('click', () => operatePool('finalize', client, waveId));
+    document.querySelector('#cancel-pool')?.addEventListener('click', () => operatePool('cancel', client, waveId));
+  } catch (error) {
+    panel.innerHTML = `<div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div><span class="network-badge degraded">unavailable</span></div><p>${esc(error.message || 'Could not read the configured pool.')}</p>`;
+  }
+}
+
+async function createPool(event, client, waveId) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const amount = form.elements.amount.value;
+  if (!/^\d+$/.test(amount) || BigInt(amount) <= 0n) return;
+  if (!confirm(`Create wave ${waveId} and transfer ${amount} token base units from ${walletAddress} into the Soroban pool? Review the transaction in Freighter before approving.`)) return;
+  const status = document.querySelector('#pool-operation-status');
+  status.textContent = 'Preparing pool funding transaction…';
+  try {
+    const tx = await client.create_wave({ creator: walletAddress, wave_id: waveId, amount: BigInt(amount) });
+    const sent = await signAndSendWithFreighter(tx);
+    status.textContent = `Pool created and funded on testnet: ${sent.hash || 'confirmed'}.`;
+    await loadChainOperations();
+  } catch (error) {
+    status.textContent = `${error.message || 'Pool funding failed.'} No transfer occurs unless approved and confirmed in Freighter.`;
+  }
+}
+
+async function operatePool(operation, client, waveId) {
+  const method = operation === 'finalize' ? 'finalize_wave' : 'cancel_wave';
+  const prompt = operation === 'finalize'
+    ? `Finalize wave ${waveId}? This locks the points total and enables eligible contributors to claim.`
+    : `Cancel wave ${waveId} and refund its remaining pool to ${walletAddress}? This is allowed only before any points are awarded.`;
+  if (!confirm(`${prompt} Freighter will ask you to approve the transaction.`)) return;
+  const status = document.querySelector('#pool-operation-status');
+  const button = document.querySelector(operation === 'finalize' ? '#finalize-pool' : '#cancel-pool');
+  if (button) button.disabled = true;
+  status.textContent = `Preparing ${operation} transaction…`;
+  try {
+    const tx = await client[method]({ wave_id: waveId });
+    const sent = await signAndSendWithFreighter(tx);
+    status.textContent = `${operation === 'finalize' ? 'Pool finalized' : 'Pool cancelled and refunded'} on testnet: ${sent.hash || 'confirmed'}.`;
+    await loadChainOperations();
+  } catch (error) {
+    status.textContent = `${error.message || `Could not ${operation} the pool.`} No state changes unless approved and confirmed in Freighter.`;
+    if (button) button.disabled = false;
+  }
 }
 
 async function loadApplications(handle) {
@@ -185,18 +329,23 @@ async function renderMaintainer() {
     ? `Pool ${esc(networkStatus.contracts.pool)} · token ${esc(networkStatus.contracts.token)}`
     : 'Contract configuration unavailable';
   const networkPanel = `<section class="network-panel"><div class="network-panel-heading"><div><p class="eyebrow">SOROWAVE NETWORK CHECK</p><h2>Stellar testnet</h2></div><span class="network-badge ${networkStatus?.status === 'healthy' ? 'healthy' : 'degraded'}">${esc(networkStatus?.status || 'unavailable')}</span></div>${networkError ? appError(networkError) : `<div class="service-list">${serviceRows}</div><p class="network-contract-state">${contractState}</p><p class="network-checked">${networkStatus?.checkedAt ? `Checked ${new Date(networkStatus.checkedAt).toLocaleTimeString()}` : 'Status is unavailable.'}</p>`}</section>`;
-  const applicationsMarkup = applications.length ? applications.slice().reverse().map(item => `<article class="application-card"><div><p class="eyebrow">${esc(item.status)} · ${new Date(item.createdAt).toLocaleDateString()}</p><h3>${esc(item.taskTitle)}</h3><p>by ${esc(item.applicant)}${item.walletAddress ? ` · ${esc(item.walletAddress)}` : ''}</p><p><a href="https://github.com/${esc(item.repo)}/issues/${Number(item.issueNumber || 0)}" target="_blank" rel="noreferrer">Open linked issue ↗</a></p></div><div><p>${esc(item.message)}</p>${item.prUrl ? `<p><a href="${esc(item.prUrl)}" target="_blank" rel="noreferrer">Review pull request ↗</a></p>` : ''}<div class="review-actions">${item.status === 'Pending' ? `<button class="button button-bright" data-review="Assigned" data-id="${esc(item.id)}">Accept & assign</button><button class="button button-quiet" data-review="Rejected" data-id="${esc(item.id)}">Reject</button>` : ''}${item.status === 'PR submitted' ? `<button class="button button-bright" data-review="Completed" data-id="${esc(item.id)}">Award points after merge</button>` : ''}</div></div></article>`).join('') : empty('No applications have been submitted yet.');
+  const applicationsMarkup = applications.length ? applications.slice().reverse().map(item => {
+    const task = allTasks.find(candidate => candidate.id === item.taskId);
+    const points = Number(task?.points || item.pointsAwarded || 0);
+    return `<article class="application-card"><div><p class="eyebrow">${esc(item.status)} · ${new Date(item.createdAt).toLocaleDateString()}</p><h3>${esc(item.taskTitle)}</h3><p>by ${esc(item.applicant)}${item.walletAddress ? ` · ${esc(item.walletAddress)}` : ''}</p><p><a href="https://github.com/${esc(item.repo)}/issues/${Number(item.issueNumber || 0)}" target="_blank" rel="noreferrer">Open linked issue ↗</a></p></div><div><p>${esc(item.message)}</p>${item.prUrl ? `<p><a href="${esc(item.prUrl)}" target="_blank" rel="noreferrer">Review pull request ↗</a></p>` : ''}<div class="review-actions">${item.status === 'Pending' ? `<button class="button button-bright" data-review="Assigned" data-id="${esc(item.id)}">Accept & assign</button><button class="button button-quiet" data-review="Rejected" data-id="${esc(item.id)}">Reject</button>` : ''}${item.status === 'PR submitted' ? `<button class="button button-bright" data-review="Completed" data-id="${esc(item.id)}" data-contributor="${esc(item.walletAddress || '')}" data-points="${points}">Approve merge & award ${points} onchain points</button>` : ''}${item.status === 'Completed' && item.onchainAwardTx ? `<p class="form-note success">Soroban award tx <code>${esc(item.onchainAwardTx)}</code></p>` : ''}</div></div></article>`;
+  }).join('') : empty('No applications have been submitted yet.');
   app.innerHTML = pageShell(
     'MAINTAINER WORKFLOW',
     'Issue review desk',
-    'Review applications, record assignments, check linked pull requests, and award preview points when work is complete.',
-    `${error ? appError(error) : ''}<div class="maintainer-preview-note">Local preview controls are open to anyone using this prototype. They do not assign GitHub issues automatically; complete the actual assignment and review on GitHub too.</div>${networkPanel}<div class="dashboard-stats"><article><span>Open issues</span><strong>${allTasks.filter(task => task.status === 'Open').length}</strong></article><article><span>Pending applications</span><strong>${pending}</strong></article><article><span>In progress</span><strong>${assigned}</strong></article><article><span>Completed issues</span><strong>${completed}</strong></article></div><div class="section-heading dashboard-heading"><div><p class="eyebrow">PREVIEW ISSUE POOL</p><h2>Cycle issues</h2></div><a class="button button-bright" href="#/publish">Add issue +</a></div><div class="task-list">${allTasks.length ? allTasks.map(issueCard).join('') : empty('No issues yet. Add a public GitHub issue to the preview cycle.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">REVIEW QUEUE</p><h2>Contributor applications</h2></div></div><div class="application-list">${applicationsMarkup}</div>`
+    'Review applications, record assignments, check merged pull requests, and award contributor points on Soroban.',
+    `${error ? appError(error) : ''}<div class="maintainer-preview-note">Local preview controls are open to anyone using this prototype. They do not assign GitHub issues automatically; complete the actual assignment and review on GitHub too.</div>${networkPanel}<section id="chain-operations" class="network-panel"><div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div></div><p>Loading configured pool…</p></section><div class="dashboard-stats"><article><span>Open issues</span><strong>${allTasks.filter(task => task.status === 'Open').length}</strong></article><article><span>Pending applications</span><strong>${pending}</strong></article><article><span>In progress</span><strong>${assigned}</strong></article><article><span>Completed issues</span><strong>${completed}</strong></article></div><div class="section-heading dashboard-heading"><div><p class="eyebrow">PREVIEW ISSUE POOL</p><h2>Cycle issues</h2></div><a class="button button-bright" href="#/publish">Add issue +</a></div><div class="task-list">${allTasks.length ? allTasks.map(issueCard).join('') : empty('No issues yet. Add a public GitHub issue to the preview cycle.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">REVIEW QUEUE</p><h2>Contributor applications</h2></div></div><div class="application-list">${applicationsMarkup}</div>`
   );
   document.querySelectorAll('[data-review]').forEach(button => button.addEventListener('click', reviewApplication));
+  await loadChainOperations();
 }
 
 function renderAbout() {
-  app.innerHTML = `<section class="how-section"><div class="how-title"><p class="eyebrow">ABOUT SOROWAVE</p><h1>One cycle.<br><em>Useful work.</em></h1><p class="page-intro">SoroWave is a community preview of a recurring contribution cycle for the Stellar ecosystem. It borrows the issue-first workflow used by Drips Wave projects.</p><a class="button button-bright" href="#/explore">Browse cycle issues →</a></div><div class="steps"><article><span>01</span><h3>Maintainers scope issues</h3><p>Link a public GitHub issue, write acceptance criteria, and set Trivial, Medium, or High complexity.</p></article><article><span>02</span><h3>Contributors apply</h3><p>Share a concise plan. Wait for maintainer assignment before beginning; the application is not an assignment.</p></article><article><span>03</span><h3>Build and submit a PR</h3><p>Work in the repository, link a pull request to the issue, and respond to review.</p></article><article><span>04</span><h3>Review and earn points</h3><p>A maintainer marks work complete after review. The preview leaderboard counts points by completed issue.</p></article></div></section><section class="maintainer-cta"><div><p class="eyebrow">IMPORTANT PROJECT STATUS</p><h2>Preview points are <em>not payouts.</em></h2><p>This cycle has no reward budget, dates, identity checks, GitHub OAuth, or automated GitHub sync. SoroWave is independent and is not affiliated with or endorsed by Drips Wave.</p></div><a class="button button-dark" href="https://docs.drips.network/wave/" target="_blank" rel="noreferrer">Read official Drips Wave docs ↗</a></section>`;
+  app.innerHTML = `<section class="how-section"><div class="how-title"><p class="eyebrow">ABOUT SOROWAVE</p><h1>One cycle.<br><em>Useful work.</em></h1><p class="page-intro">SoroWave is a Stellar testnet community project for funding and tracking open-source contributions. It borrows the issue-first workflow used by Drips Wave projects.</p><a class="button button-bright" href="#/explore">Browse cycle issues →</a></div><div class="steps"><article><span>01</span><h3>Fund a Soroban pool</h3><p>A maintainer creates a cycle and escrows test tokens into the Stellar smart contract.</p></article><article><span>02</span><h3>Contributors apply</h3><p>Connect a Stellar wallet, share a concise plan, and wait for maintainer assignment before beginning.</p></article><article><span>03</span><h3>Build and submit a PR</h3><p>Work in the repository, link a pull request to the issue, and respond to review.</p></article><article><span>04</span><h3>Award and claim onchain</h3><p>After a merged PR, a maintainer signs an idempotent Soroban points award. Finalized pool rewards can then be claimed by contributors.</p></article></div></section><section class="maintainer-cta"><div><p class="eyebrow">IMPORTANT PROJECT STATUS</p><h2>Preview points are <em>not payouts.</em></h2><p>The testnet pool must be deployed, configured, and funded before claims are possible. Identity checks and GitHub OAuth are not included. SoroWave is independent and is not affiliated with or endorsed by Drips Wave.</p></div><a class="button button-dark" href="https://docs.drips.network/wave/" target="_blank" rel="noreferrer">Read official Drips Wave docs ↗</a></section>`;
 }
 
 async function render() {
@@ -216,7 +365,7 @@ async function render() {
 function openApply(task) {
   selectedTask = task;
   document.querySelector('#dialog-task').textContent = task.title;
-  formNote.textContent = walletAddress ? `Application will include ${walletAddress.slice(0, 5)}…${walletAddress.slice(-5)}.` : 'Connect Freighter to attach a Stellar address. Applying does not require a transaction.';
+  formNote.textContent = walletAddress ? `Applying with Stellar testnet address ${walletAddress.slice(0, 5)}…${walletAddress.slice(-5)}. Applying does not submit a transaction.` : 'Connect Freighter to apply with your Stellar address.';
   formNote.className = 'form-note';
   dialog.showModal();
 }
@@ -257,14 +406,33 @@ async function submitPullRequest(event) {
 async function reviewApplication(event) {
   const button = event.currentTarget;
   const status = button.dataset.review;
-  if (status === 'Completed' && !confirm('Confirm the pull request has been reviewed and the GitHub issue is complete? Preview points will be added to the leaderboard.')) return;
+  if (status === 'Completed' && !confirm(`Confirm the merged pull request has been reviewed? This will award ${button.dataset.points} Soroban points to ${button.dataset.contributor || 'the applicant'} on Stellar testnet. Freighter will ask you to approve the transaction.`)) return;
   button.disabled = true;
+  let awardTx = '';
   try {
-    await request(`/applications/${encodeURIComponent(button.dataset.id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) });
+    if (status === 'Completed') {
+      if (!button.dataset.contributor) throw new Error('This applicant has no Stellar wallet attached. Ask them to apply again with Freighter connected.');
+      if (!walletAddress) await connectWallet();
+      if (!walletAddress) throw new Error('Connect the pool administrator wallet in Freighter before awarding points.');
+      const config = await request('/stellar/config');
+      const { client, waveId } = await getPoolConnection(config);
+      const points = Number(button.dataset.points);
+      if (!Number.isSafeInteger(points) || points <= 0) throw new Error('This issue has no valid points value.');
+      const tx = await client.award_application_points({
+        wave_id: waveId,
+        application_id: button.dataset.id,
+        contributor: button.dataset.contributor,
+        points: BigInt(points)
+      });
+      const sent = await signAndSendWithFreighter(tx);
+      awardTx = sent.hash;
+      if (!awardTx) throw new Error('The award transaction was submitted, but no confirmation hash was returned. Check the Stellar testnet explorer before retrying.');
+    }
+    await request(`/applications/${encodeURIComponent(button.dataset.id)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status, ...(awardTx ? { onchainAwardTx: awardTx } : {}) }) });
     await renderMaintainer();
   } catch (error) {
-    alert(error.message);
-    button.disabled = false;
+    alert(awardTx ? `Soroban awarded the points in transaction ${awardTx}, but the application record did not sync: ${error.message}. You can retry safely; the contract prevents duplicate awards for this application.` : error.message);
+    if (!awardTx) button.disabled = false;
   }
 }
 
@@ -283,6 +451,8 @@ async function connectWallet() {
     document.querySelector('#connect-wallet').textContent = `${walletAddress.slice(0, 5)}…${walletAddress.slice(-5)}`;
     if (status) status.textContent = 'Connected on Stellar testnet. Applications can include this address.';
     await refreshBalance(walletAddress);
+    if (document.querySelector('#onchain-rewards')) await loadOnchainRewards();
+    if (document.querySelector('#chain-operations')) await loadChainOperations();
   } catch (error) {
     if (status) status.textContent = error.message || 'Wallet connection failed.';
     else alert(error.message || 'Wallet connection failed.');
@@ -322,6 +492,11 @@ document.querySelector('#connect-wallet').addEventListener('click', connectWalle
 document.querySelector('#apply-form').addEventListener('submit', async event => {
   if (event.submitter?.value !== 'submit') return;
   event.preventDefault();
+  if (!walletAddress) {
+    formNote.textContent = 'Connect Freighter on Stellar testnet before applying so any later onchain points go to your wallet.';
+    formNote.className = 'form-note error';
+    return;
+  }
   const applicant = document.querySelector('#applicant').value.trim().replace(/^@/, '');
   const message = document.querySelector('#message').value.trim();
   try {
