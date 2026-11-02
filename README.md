@@ -1,6 +1,6 @@
 # SoroWave App
 
-The browser interface for SoroWave. It includes six routed pages: Explore, Issue details, Add an issue, Applications and points, Maintainer review desk, and About.
+The browser interface for SoroWave. It includes six routed pages: Explore, Issue details, Add an issue, Applications and points, Maintainer review desk, and About. The maintainer desk also checks Stellar testnet service health and shows whether the pool and token contract IDs are configured.
 
 ## Run
 
