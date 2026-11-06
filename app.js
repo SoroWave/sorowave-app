@@ -23,6 +23,8 @@ let leaderboard = [];
 let taskPagination = { page: 1, pageSize: 20, total: sampleTasks.length, totalPages: 1 };
 let walletAddress = localStorage.getItem('sorowave.wallet') || '';
 let selectedTask = null;
+let issueLookupSequence = 0;
+let verifiedIssueUrl = '';
 const app = document.querySelector('#app');
 const dialog = document.querySelector('#apply-dialog');
 const formNote = document.querySelector('#form-note');
@@ -91,7 +93,9 @@ async function renderExplore() {
   const query = new URLSearchParams(location.hash.split('?')[1] || '');
   const category = query.get('category') || 'all';
   const search = query.get('q') || '';
-  const page = Math.max(1, Number(query.get('page') || 1));
+  const requestedPage = Number(query.get('page') || 1);
+  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  taskPagination = { page, pageSize: 10, total: 0, totalPages: 0 };
   let error = '';
   try {
     const taskQuery = new URLSearchParams({ page: String(page), limit: '10' });
@@ -105,16 +109,24 @@ async function renderExplore() {
     error = 'The API is offline. Showing the preview issues. Start the API to publish and apply.';
   }
   const filtered = error ? sampleTasks.filter(task => (category === 'all' || task.category === category) && (!search || `${task.title} ${task.repo} ${task.description}`.toLowerCase().includes(search.toLowerCase()))) : tasks;
+  if (error) taskPagination = { page: 1, pageSize: 10, total: filtered.length, totalPages: 1 };
+  const exploreUrl = (nextCategory = category, nextSearch = search, nextPage = 1) => {
+    const params = new URLSearchParams();
+    if (nextCategory !== 'all') params.set('category', nextCategory);
+    if (nextSearch) params.set('q', nextSearch);
+    if (nextPage > 1) params.set('page', String(nextPage));
+    return `#/explore${params.size ? `?${params}` : ''}`;
+  };
   const firstResult = taskPagination.total ? (taskPagination.page - 1) * taskPagination.pageSize + 1 : 0;
   const lastResult = Math.min(taskPagination.page * taskPagination.pageSize, taskPagination.total);
-  const pager = taskPagination.totalPages > 1 ? `<div class="issue-pagination"><span>Showing ${firstResult}–${lastResult} of ${taskPagination.total} issues</span><div>${page > 1 ? `<a class="button button-quiet" href="#/explore?${new URLSearchParams({ ...(category !== 'all' ? {category} : {}), ...(search ? {q: search} : {}), page: String(page - 1) })}">← Previous</a>` : ''}${page < taskPagination.totalPages ? `<a class="button button-quiet" href="#/explore?${new URLSearchParams({ ...(category !== 'all' ? {category} : {}), ...(search ? {q: search} : {}), page: String(page + 1) })}">Next →</a>` : ''}</div></div>` : '';
+  const pager = taskPagination.totalPages > 1 ? `<div class="issue-pagination"><span>Showing ${firstResult}–${lastResult} of ${taskPagination.total} issues</span><div>${page > 1 ? `<a class="button button-quiet" href="${exploreUrl(category, search, page - 1)}">← Previous</a>` : ''}${page < taskPagination.totalPages ? `<a class="button button-quiet" href="${exploreUrl(category, search, page + 1)}">Next →</a>` : ''}</div></div>` : '';
 
-  app.innerHTML = `<section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="live-dot"></span> STELLAR BUILDERS, BUILD TOGETHER</p><h1>Good open source<br>moves <em>everyone</em> forward.</h1><p class="hero-lede">Pick a real GitHub issue, get assigned, ship a pull request, and build a contribution record.</p><div class="hero-actions"><a class="button button-bright" href="#/explore">Browse preview issues <span>→</span></a><a class="text-link" href="#/about">How the cycle works ↓</a></div><p class="wallet-status" id="wallet-status">${walletAddress ? `Connected on testnet: ${esc(walletAddress)}` : 'Connect Freighter to attach your public address to an application.'}</p></div><div class="hero-art"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><div class="art-core"><span>SW</span><small>BUILD<br>TOGETHER</small></div><span class="node node-one">✳</span><span class="node node-two">⌘</span><span class="node node-three">↗</span><span class="node node-four">◎</span><span class="art-caption">COMMUNITY<br>POWERED</span></div></section>${waveBanner(currentWave)}<section class="work-section"><div class="section-heading"><div><p class="eyebrow">ISSUES IN THIS CYCLE</p><h2>Find your next <em>good problem.</em></h2></div><a href="#/publish" class="text-link">Maintainer? Add a GitHub issue ↗</a></div><form id="task-search" class="search-bar"><input name="q" value="${esc(search)}" placeholder="Search issue titles, scope, and repos" aria-label="Search issues"><button class="button button-dark">Search</button></form><div class="filters"><a class="filter ${category === 'all' ? 'active' : ''}" href="#/explore">All issues <span>${taskPagination.total}</span></a>${[['contracts','Contracts'],['developer-tools','Developer tools'],['payments','Payments']].map(([slug,label]) => `<a class="filter ${category === slug ? 'active' : ''}" href="#/explore?category=${slug}">${label}</a>`).join('')}</div><div class="chain-panel"><div><b>Stellar testnet</b><span id="balance-status">${walletAddress ? 'Checking connected testnet account…' : 'Connect a wallet to check its testnet account.'}</span></div><button id="fund-account" class="text-link" ${walletAddress ? '' : 'hidden'}>Get test XLM ↗</button><a class="text-link" href="https://stellar.expert/explorer/testnet" target="_blank" rel="noreferrer">Testnet explorer ↗</a></div>${error ? appError(error) : ''}<div class="task-list">${filtered.length ? filtered.map(issueCard).join('') : empty('No issues match this search yet.')}</div>${pager}<p class="board-foot"><span class="live-dot"></span> Points are preview values only. This cycle has no funded reward pool or payout.</p></section>`;
+  app.innerHTML = `<section class="hero"><div class="hero-copy"><p class="eyebrow"><span class="live-dot"></span> STELLAR BUILDERS, BUILD TOGETHER</p><h1>Good open source<br>moves <em>everyone</em> forward.</h1><p class="hero-lede">Pick a real GitHub issue, get assigned, ship a pull request, and build a contribution record.</p><div class="hero-actions"><a class="button button-bright" href="${exploreUrl('all', '', 1)}">Browse preview issues <span>→</span></a><a class="text-link" href="#/about">How the cycle works ↓</a></div><p class="wallet-status" id="wallet-status">${walletAddress ? `Connected on testnet: ${esc(walletAddress)}` : 'Connect Freighter to attach your public address to an application.'}</p></div><div class="hero-art"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="orbit orbit-three"></div><div class="art-core"><span>SW</span><small>BUILD<br>TOGETHER</small></div><span class="node node-one">✳</span><span class="node node-two">⌘</span><span class="node node-three">↗</span><span class="node node-four">◎</span><span class="art-caption">COMMUNITY<br>POWERED</span></div></section>${waveBanner(currentWave)}<section class="work-section"><div class="section-heading"><div><p class="eyebrow">ISSUES IN THIS CYCLE</p><h2>Find your next <em>good problem.</em></h2></div><a href="#/publish" class="text-link">Maintainer? Add a GitHub issue ↗</a></div><form id="task-search" class="search-bar"><input name="q" value="${esc(search)}" placeholder="Search issue titles, scope, and repos" aria-label="Search issues"><button class="button button-dark">Search</button></form><div class="filters"><a class="filter ${category === 'all' ? 'active' : ''}" href="${exploreUrl('all')}">All issues <span>${taskPagination.total}</span></a>${[['contracts','Contracts'],['developer-tools','Developer tools'],['payments','Payments']].map(([slug,label]) => `<a class="filter ${category === slug ? 'active' : ''}" href="${exploreUrl(slug)}">${label}</a>`).join('')}</div><div class="chain-panel"><div><b>Stellar testnet</b><span id="balance-status">${walletAddress ? 'Checking connected testnet account…' : 'Connect a wallet to check its testnet account.'}</span></div><button id="fund-account" class="text-link" ${walletAddress ? '' : 'hidden'}>Get test XLM ↗</button><a class="text-link" href="https://stellar.expert/explorer/testnet" target="_blank" rel="noreferrer">Testnet explorer ↗</a></div>${error ? appError(error) : ''}<div class="task-list">${filtered.length ? filtered.map(issueCard).join('') : empty('No issues match this search yet.')}</div>${pager}<p class="board-foot"><span class="live-dot"></span> Points are preview values only. This cycle has no funded reward pool or payout.</p></section>`;
 
   document.querySelector('#task-search').addEventListener('submit', event => {
     event.preventDefault();
     const q = new FormData(event.currentTarget).get('q').trim();
-    location.hash = `/explore${q ? `?q=${encodeURIComponent(q)}` : ''}`;
+    location.hash = exploreUrl(category, q, 1);
   });
   document.querySelector('#fund-account')?.addEventListener('click', fundTestnet);
   if (walletAddress) refreshBalance(walletAddress);
@@ -136,29 +148,49 @@ async function renderTask(id) {
 }
 
 async function renderPublish() {
-  app.innerHTML = pageShell('MAINTAINERS','Add an issue to the preview cycle','Create the issue in GitHub first. SoroWave verifies that it is a public, open issue and uses its canonical title.', `<div class="repo-onboarding"><p class="eyebrow">REPOSITORIES IN THIS PREVIEW</p><div>${['sorowave-app','sorowave-api','sorowave-contracts'].map(repo => `<a href="https://github.com/SoroWave/${repo}" target="_blank" rel="noreferrer">SoroWave/${repo} ↗</a>`).join('')}</div></div><form id="publish-form" class="form-card"><label for="issueUrl">GitHub issue URL</label><input id="issueUrl" name="issueUrl" type="url" required placeholder="https://github.com/org/repo/issues/123"><p id="issue-lookup-note" class="form-note">Paste a URL and leave the field to verify the issue and prefill its title and description.</p><label for="title">Issue title</label><input id="title" name="title" required minlength="8" maxlength="120" readonly placeholder="Verified from GitHub"><label for="description">Scope and acceptance criteria</label><textarea id="description" name="description" required minlength="40" maxlength="4000" placeholder="Add any missing acceptance criteria or contributor guidance."></textarea><div class="form-grid"><div><label for="category">Category</label><select id="category" name="category"><option value="contracts">Contracts</option><option value="developer-tools">Developer tools</option><option value="payments">Payments</option></select></div><div><label for="complexity">Complexity</label><select id="complexity" name="complexity"><option value="Trivial">Trivial — 100 points</option><option value="Medium">Medium — 150 points</option><option value="High">High — 200 points</option></select></div></div><p id="publish-note" class="form-note">Only a public, open GitHub issue can be added. Points are preview values.</p><button class="button button-bright">Add issue to cycle →</button></form>`);
-  document.querySelector('#issueUrl').addEventListener('change', lookupGitHubIssue);
-  document.querySelector('#issueUrl').addEventListener('blur', lookupGitHubIssue);
+  app.innerHTML = pageShell('MAINTAINERS','Add an issue to the preview cycle','Create the issue in GitHub first. SoroWave verifies that it is a public, open issue and uses its canonical title.', `<div class="repo-onboarding"><p class="eyebrow">REPOSITORIES IN THIS PREVIEW</p><div>${['sorowave-app','sorowave-api','sorowave-contracts'].map(repo => `<a href="https://github.com/SoroWave/${repo}" target="_blank" rel="noreferrer">SoroWave/${repo} ↗</a>`).join('')}</div></div><form id="publish-form" class="form-card"><label for="issueUrl">GitHub issue URL</label><div class="verify-row"><input id="issueUrl" name="issueUrl" type="url" required placeholder="https://github.com/org/repo/issues/123"><button id="verify-issue" class="button button-quiet" type="button">Verify issue</button></div><p id="issue-lookup-note" class="form-note">Paste a URL, then verify it before adding it to the cycle.</p><label for="title">Issue title</label><input id="title" name="title" required minlength="8" maxlength="120" readonly placeholder="Verified from GitHub"><label for="description">Scope and acceptance criteria</label><textarea id="description" name="description" required minlength="40" maxlength="4000" placeholder="Add any missing acceptance criteria or contributor guidance."></textarea><div class="form-grid"><div><label for="category">Category</label><select id="category" name="category"><option value="contracts">Contracts</option><option value="developer-tools">Developer tools</option><option value="payments">Payments</option></select></div><div><label for="complexity">Complexity</label><select id="complexity" name="complexity"><option value="Trivial">Trivial — 100 points</option><option value="Medium">Medium — 150 points</option><option value="High">High — 200 points</option></select></div></div><p id="publish-note" class="form-note">Only a public, open GitHub issue can be added. Points are preview values.</p><button class="button button-bright">Add issue to cycle →</button></form>`);
+  verifiedIssueUrl = '';
+  const issueInput = document.querySelector('#issueUrl');
+  document.querySelector('#verify-issue').addEventListener('click', lookupGitHubIssue);
+  issueInput.addEventListener('input', () => {
+    if (issueInput.value.trim() === verifiedIssueUrl) return;
+    issueLookupSequence += 1;
+    verifiedIssueUrl = '';
+    document.querySelector('#verify-issue').disabled = false;
+    document.querySelector('#title').value = '';
+    document.querySelector('#description').value = '';
+    document.querySelector('#issue-lookup-note').textContent = 'Verify this GitHub issue before adding it to the cycle.';
+    document.querySelector('#issue-lookup-note').className = 'form-note';
+  });
   document.querySelector('#publish-form').addEventListener('submit', publishTask);
 }
 
 async function lookupGitHubIssue(event) {
-  const input = event.currentTarget;
+  const input = document.querySelector('#issueUrl');
+  const button = event.currentTarget;
   const url = input.value.trim();
-  if (!url) return;
+  if (!url || url === verifiedIssueUrl) return;
+  const sequence = ++issueLookupSequence;
+  verifiedIssueUrl = '';
+  document.querySelector('#title').value = '';
+  document.querySelector('#description').value = '';
   const note = document.querySelector('#issue-lookup-note');
+  button.disabled = true;
   note.textContent = 'Checking public GitHub issue…';
   note.className = 'form-note';
   try {
     const data = await request(`/github/issue?url=${encodeURIComponent(url)}`);
+    if (sequence !== issueLookupSequence || input.value.trim() !== url) return;
     document.querySelector('#title').value = data.issue.title;
     document.querySelector('#description').value = data.issue.body;
+    verifiedIssueUrl = url;
     note.textContent = `Verified open issue #${data.issue.number} in ${data.issue.repository}. Add acceptance criteria if the GitHub description is brief.`;
     note.className = 'form-note success';
   } catch (error) {
+    if (sequence !== issueLookupSequence || input.value.trim() !== url) return;
     note.textContent = error.message;
     note.className = 'form-note error';
-  }
+  } finally { if (sequence === issueLookupSequence) button.disabled = false; }
 }
 
 async function renderApplications() {
@@ -337,12 +369,13 @@ async function loadLeaderboard() {
 
 async function renderMaintainer() {
   let allTasks = [], applications = [], error = '', networkStatus = null, networkError = '';
+  try { allTasks = (await request('/tasks?all=true')).tasks; }
+  catch (err) { error = err.message; }
+  let authorized = false;
   try {
-    [allTasks, applications] = await Promise.all([
-      request('/tasks?all=true').then(data => data.tasks),
-      requestAsMaintainer('/applications').then(data => data.applications)
-    ]);
-  } catch (err) { error = err.message; }
+    applications = (await requestAsMaintainer('/applications')).applications;
+    authorized = true;
+  } catch (err) { error = error ? `${error} ${err.message}` : err.message; }
   try { networkStatus = await request('/stellar/status'); }
   catch (err) { networkError = err.message; }
   const pending = applications.filter(item => item.status === 'Pending').length;
@@ -362,7 +395,7 @@ async function renderMaintainer() {
     'MAINTAINER WORKFLOW',
     'Issue review desk',
     'Review applications, record assignments, check merged pull requests, and award contributor points on Soroban.',
-    `${error ? appError(error) : ''}<div class="maintainer-preview-note">Maintainer actions require the API token for this local preview. Assignments recorded here do not update GitHub automatically, so assign the issue on GitHub as well.</div>${networkPanel}<section id="chain-operations" class="network-panel"><div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div></div><p>Loading configured pool…</p></section><div class="dashboard-stats"><article><span>Open issues</span><strong>${allTasks.filter(task => task.status === 'Open').length}</strong></article><article><span>Pending applications</span><strong>${pending}</strong></article><article><span>In progress</span><strong>${assigned}</strong></article><article><span>Completed issues</span><strong>${completed}</strong></article></div><div class="section-heading dashboard-heading"><div><p class="eyebrow">PREVIEW ISSUE POOL</p><h2>Cycle issues</h2></div><a class="button button-bright" href="#/publish">Add issue +</a></div><div class="task-list">${allTasks.length ? allTasks.map(issueCard).join('') : empty('No issues yet. Add a public GitHub issue to the preview cycle.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">REVIEW QUEUE</p><h2>Contributor applications</h2></div></div><div class="application-list">${applicationsMarkup}</div>`
+    `${error ? appError(error) : ''}<div class="maintainer-preview-note">Maintainer actions require the API token for this local preview. Assignments recorded here do not update GitHub automatically, so assign the issue on GitHub as well.</div>${networkPanel}<section id="chain-operations" class="network-panel"><div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div></div><p>Loading configured pool…</p></section><div class="dashboard-stats"><article><span>Open issues</span><strong>${allTasks.filter(task => task.status === 'Open').length}</strong></article><article><span>Pending applications</span><strong>${pending}</strong></article><article><span>In progress</span><strong>${assigned}</strong></article><article><span>Completed issues</span><strong>${completed}</strong></article></div><div class="section-heading dashboard-heading"><div><p class="eyebrow">PREVIEW ISSUE POOL</p><h2>Cycle issues</h2></div><a class="button button-bright" href="#/publish">Add issue +</a></div><div class="task-list">${allTasks.length ? allTasks.map(issueCard).join('') : empty('No issues yet. Add a public GitHub issue to the preview cycle.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">REVIEW QUEUE</p><h2>Contributor applications</h2></div></div>${authorized ? `<div class="application-list">${applicationsMarkup}</div>` : `<div class="empty-state">Enter the maintainer token to view or review private applications. Refresh this page after configuring the local API token.</div>`}`
   );
   document.querySelectorAll('[data-review]').forEach(button => button.addEventListener('click', reviewApplication));
   await loadChainOperations();
@@ -398,6 +431,12 @@ async function publishTask(event) {
   event.preventDefault();
   const button = event.submitter;
   const note = document.querySelector('#publish-note');
+  const issueUrl = document.querySelector('#issueUrl').value.trim();
+  if (!issueUrl || issueUrl !== verifiedIssueUrl) {
+    note.textContent = 'Verify the current GitHub issue URL before adding it.';
+    note.className = 'form-note error';
+    return;
+  }
   button.disabled = true;
   note.textContent = 'Adding issue…';
   const input = Object.fromEntries(new FormData(event.currentTarget));
@@ -523,6 +562,10 @@ document.querySelector('#apply-form').addEventListener('submit', async event => 
   }
   const applicant = document.querySelector('#applicant').value.trim().replace(/^@/, '');
   const message = document.querySelector('#message').value.trim();
+  const submitButton = document.querySelector('#submit-application');
+  submitButton.disabled = true;
+  formNote.textContent = 'Submitting your application…';
+  formNote.className = 'form-note';
   try {
     await request('/applications', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ taskId: selectedTask.id, applicant, message, walletAddress: walletAddress || undefined }) });
     localStorage.setItem('sorowave.github', applicant);
@@ -530,7 +573,7 @@ document.querySelector('#apply-form').addEventListener('submit', async event => 
     formNote.className = 'form-note success';
     event.target.reset();
     setTimeout(() => { dialog.close(); location.hash = '/applications'; }, 900);
-  } catch (error) { formNote.textContent = error.message; formNote.className = 'form-note error'; }
+  } catch (error) { formNote.textContent = error.message; formNote.className = 'form-note error'; submitButton.disabled = false; }
 });
 
 window.addEventListener('hashchange', render);
