@@ -3,26 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0d1714">
-  <meta name="description" content="Find open source work and help build the Stellar ecosystem with SoroWave.">
-  <title>SoroWave — open source, in motion</title>
+  <meta name="theme-color" content="#101925">
+  <meta name="description" content="SoroWave connects real open source issues with contributors building on Stellar.">
+  <title>SoroWave — open work, visible progress</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <a class="skip-link" href="#app">Skip to content</a>
   <header class="topbar">
-    <a class="brand" href="#/explore" aria-label="SoroWave home"><span class="brand-mark">S</span> SoroWave</a>
+    <a class="brand" href="#/explore" aria-label="SoroWave home"><span class="brand-mark">≋</span> SoroWave<span class="brand-edition">COMMUNITY NETWORK</span></a>
     <nav aria-label="Main navigation" class="page-nav">
-      <a href="#/explore" data-nav="explore">Explore</a>
-      <a href="#/publish" data-nav="publish">Publish work</a>
-      <a href="#/applications" data-nav="applications">My applications</a>
-      <a href="#/maintainer" data-nav="maintainer">Maintainer</a>
-      <a href="#/about" data-nav="about">About</a>
+      <a href="#/explore" data-nav="explore">Issue board</a>
+      <a href="#/publish" data-nav="publish">For maintainers</a>
+      <a href="#/applications" data-nav="applications">My progress</a>
+      <a href="#/maintainer" data-nav="maintainer">Review desk</a>
+      <a href="#/about" data-nav="about">Project</a>
     </nav>
     <div class="wallet-tools"><span class="tag">Stellar testnet</span><button class="button button-quiet" id="connect-wallet">Connect Freighter</button></div>
   </header>
   <main id="app" tabindex="-1" aria-live="polite"></main>
-  <footer><a class="brand" href="#/explore"><span class="brand-mark">S</span> SoroWave</a><span>Open work. Shared progress. Built on Stellar.</span><a href="https://developers.stellar.org/" target="_blank" rel="noreferrer">Stellar developer docs ↗</a></footer>
+  <footer><a class="brand" href="#/explore"><span class="brand-mark">≋</span> SoroWave</a><span>Good work travels further when progress is visible.</span><a href="https://developers.stellar.org/" target="_blank" rel="noreferrer">Stellar developer docs ↗</a></footer>
   <dialog id="apply-dialog"><form method="dialog" class="dialog-card" id="apply-form"><button class="dialog-close" aria-label="Close">×</button><p class="eyebrow">RAISE YOUR HAND</p><h2>Apply to this task</h2><p id="dialog-task" class="dialog-task"></p><label for="applicant">Your GitHub username</label><input id="applicant" name="applicant" required placeholder="octocat" pattern="[A-Za-z0-9-]{1,39}"><label for="message">Why are you a good fit?</label><textarea id="message" name="message" required minlength="20" maxlength="3000" placeholder="Share relevant experience and how you would approach this task…"></textarea><button class="button button-bright" id="submit-application" value="submit">Send application <span>→</span></button><p class="form-note" id="form-note">Applications can include your connected public Stellar address. No wallet transaction is required.</p></form></dialog>
   <script type="module" src="app.js"></script>
 </body>
