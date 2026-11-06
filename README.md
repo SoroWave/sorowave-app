@@ -2,6 +2,10 @@
 
 The browser interface for SoroWave. It includes six routed pages: Explore, Issue details, Add an issue, Applications and points, Maintainer review desk, and About. The maintainer desk also checks Stellar testnet service health and shows whether the pool and token contract IDs are configured.
 
+## Documentation
+
+GitBook-ready product and developer documentation lives in [`gitbook/`](gitbook/README.md). When connecting this repository to GitBook, select `gitbook/` as the project directory and import from GitHub to GitBook. GitBook publishes the documentation site; the SoroWave app and API still need a separate app host.
+
 ## Run
 
 Requires Node.js 22.12+.
