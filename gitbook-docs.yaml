@@ -1,0 +1,12 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+site:
+  title: SoroWave Docs
+  structure:
+    - type: space
+      key: sorowave-documentation
+      title: SoroWave Documentation
+      path: sorowave
+      default: true
+      content:
+        directory: ./gitbook
+        language: en
