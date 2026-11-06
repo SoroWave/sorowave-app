@@ -6,16 +6,15 @@ const previewWave = {
   id: 'sorowave-community-preview',
   title: 'Community Preview Cycle',
   status: 'preview',
-  issues: 3,
+  issues: 2,
   completedIssues: 0,
-  pointsAvailable: 500,
+  pointsAvailable: 300,
   rewardPool: null,
   description: 'A preview cycle for practicing the contribution workflow. It is not an official Drips Wave and has no funded reward pool.'
 };
 const sampleTasks = [
   {id:'task-app-search',title:'Add keyword search to the task board',description:'Let contributors search task titles, repository names, and issue descriptions. Keep the search usable on mobile and announce the result count to assistive technology.',repo:'SoroWave/sorowave-app',issueNumber:1,issueUrl:'https://github.com/SoroWave/sorowave-app/issues/1',category:'developer-tools',complexity:'Medium',points:150,status:'Open',waveId:previewWave.id},
-  {id:'task-api-pagination',title:'Add pagination to GET /tasks',description:'Add stable page and page-size parameters to the task endpoint. Return pagination metadata and keep the default response bounded.',repo:'SoroWave/sorowave-api',issueNumber:1,issueUrl:'https://github.com/SoroWave/sorowave-api/issues/1',category:'developer-tools',complexity:'Medium',points:150,status:'Open',waveId:previewWave.id},
-  {id:'task-contract-lifecycle',title:'Add Soroban tests for the bounty lifecycle',description:'Cover contract initialization, bounty creation, release, cancellation, authorization failures, and invalid state transitions with Soroban test utilities.',repo:'SoroWave/sorowave-contracts',issueNumber:1,issueUrl:'https://github.com/SoroWave/sorowave-contracts/issues/1',category:'contracts',complexity:'High',points:200,status:'Open',waveId:previewWave.id}
+  {id:'task-api-pagination',title:'Add pagination to GET /tasks',description:'Add a bounded limit and stable next-page cursor to GET /tasks. Keep category filtering consistent across pages, reject malformed values, and document example requests and responses.',repo:'SoroWave/sorowave-api',issueNumber:1,issueUrl:'https://github.com/SoroWave/sorowave-api/issues/1',category:'developer-tools',complexity:'Medium',points:150,status:'Open',waveId:previewWave.id}
 ];
 
 let tasks = sampleTasks;
@@ -363,7 +362,7 @@ async function renderMaintainer() {
     'MAINTAINER WORKFLOW',
     'Issue review desk',
     'Review applications, record assignments, check merged pull requests, and award contributor points on Soroban.',
-    `${error ? appError(error) : ''}<div class="maintainer-preview-note">Local preview controls are open to anyone using this prototype. They do not assign GitHub issues automatically; complete the actual assignment and review on GitHub too.</div>${networkPanel}<section id="chain-operations" class="network-panel"><div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div></div><p>Loading configured pool…</p></section><div class="dashboard-stats"><article><span>Open issues</span><strong>${allTasks.filter(task => task.status === 'Open').length}</strong></article><article><span>Pending applications</span><strong>${pending}</strong></article><article><span>In progress</span><strong>${assigned}</strong></article><article><span>Completed issues</span><strong>${completed}</strong></article></div><div class="section-heading dashboard-heading"><div><p class="eyebrow">PREVIEW ISSUE POOL</p><h2>Cycle issues</h2></div><a class="button button-bright" href="#/publish">Add issue +</a></div><div class="task-list">${allTasks.length ? allTasks.map(issueCard).join('') : empty('No issues yet. Add a public GitHub issue to the preview cycle.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">REVIEW QUEUE</p><h2>Contributor applications</h2></div></div><div class="application-list">${applicationsMarkup}</div>`
+    `${error ? appError(error) : ''}<div class="maintainer-preview-note">Maintainer actions require the API token for this local preview. Assignments recorded here do not update GitHub automatically, so assign the issue on GitHub as well.</div>${networkPanel}<section id="chain-operations" class="network-panel"><div class="network-panel-heading"><div><p class="eyebrow">SOROBAN · MAINTAINER OPERATIONS</p><h2>Fund and finalize the cycle</h2></div></div><p>Loading configured pool…</p></section><div class="dashboard-stats"><article><span>Open issues</span><strong>${allTasks.filter(task => task.status === 'Open').length}</strong></article><article><span>Pending applications</span><strong>${pending}</strong></article><article><span>In progress</span><strong>${assigned}</strong></article><article><span>Completed issues</span><strong>${completed}</strong></article></div><div class="section-heading dashboard-heading"><div><p class="eyebrow">PREVIEW ISSUE POOL</p><h2>Cycle issues</h2></div><a class="button button-bright" href="#/publish">Add issue +</a></div><div class="task-list">${allTasks.length ? allTasks.map(issueCard).join('') : empty('No issues yet. Add a public GitHub issue to the preview cycle.')}</div><div class="section-heading dashboard-heading"><div><p class="eyebrow">REVIEW QUEUE</p><h2>Contributor applications</h2></div></div><div class="application-list">${applicationsMarkup}</div>`
   );
   document.querySelectorAll('[data-review]').forEach(button => button.addEventListener('click', reviewApplication));
   await loadChainOperations();
